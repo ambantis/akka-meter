@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration debug="true">
+
+    <statusListener class="ch.qos.logback.core.status.OnConsoleStatusListener" />
+    <jmxConfigurator />
+
+    <!-- Insert the current time formatted as "yyyyMMdd'T'HHmmss" under
+        the key "bySecond" into the logger context. This value will be
+        available to all subsequent configuration elements. -->
+    <timestamp key="bySecond" datePattern="yyyyMMdd'T'HHmmss"/>
+
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <!-- use the previously created timestamp to create a uniquely
+             named log file -->
+        <file>logs/${AK_ROLE:-application}-${bySecond}.log</file>
+        <encoder>
+            <pattern>%date{ISO8601} %-5level %logger{36} %X{akkaSource} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%date{ISO8601} %-5level %logger{36} %X{akkaSource} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+        <appender-ref ref="FILE" />
+    </root>
+
+</configuration>
