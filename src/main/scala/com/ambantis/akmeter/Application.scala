@@ -1,10 +1,11 @@
 package com.ambantis.akmeter
 
-import akka.actor.{ActorSystem, Props}
-import com.typesafe.config.ConfigFactory
 import scala.concurrent.duration._
 
-import akka.actor.Actor
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import com.typesafe.config.ConfigFactory
+import com.ambantis.akmeter.api.ApiActor
+import com.ambantis.akmeter.db.DbActor
 
 object Application extends App {
 
@@ -14,14 +15,16 @@ object Application extends App {
 
   system.registerOnTermination(System.exit(0))
 
-  system.actorOf(Props(new Application(AppConfig(config))))
-
-
-
+  system.actorOf(Props(new Application(AppConfig(config))), "akmeter")
 }
 
-class Application(cfg: AppConfig) extends BaseActor {
-  import context.dispatcher
+class Application(appConfig: AppConfig) extends BaseActor {
+  import context.{actorOf, dispatcher, watch}
+
+  val db = watch(initDbClient())
+  def initDbClient(): ActorRef = actorOf(DbActor.props(), DbActor.name)
+
+  val roles = appConfig.roles.map(role => watch(actorOf(role.props(appConfig, db), role.name)))
 
   override def preStart(): Unit = {
     log.info("hello world")
