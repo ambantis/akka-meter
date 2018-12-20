@@ -1,6 +1,7 @@
 package com.ambantis.akmeter
 package sim
 
+import java.io.Closeable
 import java.util.concurrent.{Executors, ScheduledExecutorService, ScheduledFuture}
 
 import scala.collection.AbstractIterator
@@ -14,13 +15,13 @@ import akka.stream.scaladsl.{Sink, Source}
 import com.ambantis.akmeter.util.Converters.FutureOps
 import com.ambantis.akmeter.util.{ApiClient, Generator, Metrics}
 
-abstract class Simulator[T, U] {
+abstract class Simulator[T, U] extends Closeable {
 
   def run(implicit mat: ActorMaterializer): Future[Boolean]
 
 }
 
-final case class FunSimulator[T, U](
+final case class SequentialSimulator[T, U](
   config: SimConfig,
   client: ApiClient[T, U],
   validateFun: (T, U) => Try[Option[Unit]],
@@ -28,37 +29,46 @@ final case class FunSimulator[T, U](
   metrics: Metrics[T, U]
 ) extends Simulator[T, U] {
 
-  val p = Promise[Boolean]()
-
   val es: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 
   @volatile private var currentN: Double = 0
 
   var optFuture: Option[ScheduledFuture[_]] = None
 
-  // run can only be run once
-  def run(implicit mat: ActorMaterializer): Future[Boolean] = synchronized {
-    import mat.executionContext
+  def canBeRun: Boolean = !es.isShutdown && optFuture.isEmpty
 
-    if (optFuture.isDefined) Future.failed(new IllegalArgumentException("simulation already started"))
+  // run can only be run once
+  override def run(implicit mat: ActorMaterializer): Future[Boolean] = synchronized {
+    import mat.executionContext
+    val p = Promise[Boolean]()
+
+    if (canBeRun) p.tryFailure(new IllegalArgumentException("simulation already started"))
     else {
-      optFuture = Some(
+      val scheduledFuture =
         es.scheduleAtFixedRate(new Runnable {
           def run(): Unit = {
             val n = nextN()
             callApi(n)
           }
         }, /* initialDelay = */ 10, /* delay = */ 1, SECONDS)
-      )
+
+      // stop the simulation when the simulation duration expires
+      es.schedule(new Runnable {
+        def run(): Unit = p.tryComplete(Try(scheduledFuture.cancel(false)))
+      }, config.duration.length, config.duration.unit)
+
+      optFuture = Some(scheduledFuture)
+
+      p.future.onComplete { _ =>
+        currentN = 0
+        optFuture = None
+      }
     }
 
-    // stop the simulation when the simulation duration expires
-    es.schedule(new Runnable {
-      def run(): Unit = optFuture.foreach(sf => p.tryComplete(Try(sf.cancel(false))))
-    }, config.duration.length, config.duration.unit)
-
-    p.future.andThen { case _ => es.shutdown() }
+    p.future
   }
+
+  override def close(): Unit = es.shutdown()
 
   // since this value is accessed once per second by a single threaded executor,
   // we should not have to worry about multiple threads calling this method at
