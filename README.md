@@ -5,6 +5,7 @@
 The goal of this project is simple: use Akka to load test an Akka server, though it can be used to performance test any
 endpoint.
 
+The current version is a proof of concept.
 
 ## Getting Started
 
