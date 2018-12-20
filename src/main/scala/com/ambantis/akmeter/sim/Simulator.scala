@@ -70,7 +70,7 @@ final case class FunSimulator[T, U](
   }
 
   val requests: Iterator[T] = new AbstractIterator[T] {
-    val vec: Vector[T] = generator.requests(config.userCount).toVector
+    val vec: Vector[T] = generator.requests(config.requestCount).toVector
 
     val zero = 0
     val max = vec.length - 1
