@@ -1,9 +1,9 @@
 package com.ambantis.akmeter
-package sim
+package util
 
 import scala.util.{Failure, Success, Try}
 
-trait SimMetrics[T, U] {
+trait Metrics[T, U] {
 
   def ok(implicit request: T): Unit
   def unk(implicit request: T): Unit

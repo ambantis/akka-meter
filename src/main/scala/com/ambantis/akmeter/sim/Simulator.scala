@@ -1,11 +1,10 @@
 package com.ambantis.akmeter
 package sim
 
-import java.io.Closeable
 import java.util.concurrent.{Executors, ScheduledExecutorService, ScheduledFuture}
 
 import scala.collection.AbstractIterator
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
@@ -13,17 +12,53 @@ import akka.NotUsed
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import com.ambantis.akmeter.util.Converters.FutureOps
+import com.ambantis.akmeter.util.{ApiClient, Generator, Metrics}
 
-class AbstractSimulator[T, U](
+abstract class Simulator[T, U] {
+
+  def run(implicit mat: ActorMaterializer): Future[Boolean]
+
+}
+
+final case class FunSimulator[T, U](
   config: SimConfig,
   client: ApiClient[T, U],
-  requestFun: => T,
   validateFun: (T, U) => Try[Option[Unit]],
   generator: Generator[T],
-  metrics: SimMetrics[T, U]
-) {
+  metrics: Metrics[T, U]
+) extends Simulator[T, U] {
+
+  val p = Promise[Boolean]()
+
+  val es: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 
   @volatile private var currentN: Double = 0
+
+  var optFuture: Option[ScheduledFuture[_]] = None
+
+  // run can only be run once
+  def run(implicit mat: ActorMaterializer): Future[Boolean] = synchronized {
+    import mat.executionContext
+
+    if (optFuture.isDefined) Future.failed(new IllegalArgumentException("simulation already started"))
+    else {
+      optFuture = Some(
+        es.scheduleAtFixedRate(new Runnable {
+          def run(): Unit = {
+            val n = nextN()
+            callApi(n)
+          }
+        }, /* initialDelay = */ 10, /* delay = */ 1, SECONDS)
+      )
+    }
+
+    // stop the simulation when the simulation duration expires
+    es.schedule(new Runnable {
+      def run(): Unit = optFuture.foreach(sf => p.tryComplete(Try(sf.cancel(false))))
+    }, config.duration.length, config.duration.unit)
+
+    p.future.andThen { case _ => es.shutdown() }
+  }
 
   // since this value is accessed once per second by a single threaded executor,
   // we should not have to worry about multiple threads calling this method at
@@ -74,36 +109,5 @@ class AbstractSimulator[T, U](
       }
       .runWith(Sink.ignore)
   }
-
-  def run(implicit mat: ActorMaterializer): Future[Boolean] = {
-    val p = Promise[Boolean]()
-
-    val es: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-
-    val scheduledFuture: ScheduledFuture[_] =
-      es.scheduleAtFixedRate(new Runnable {
-        override def run(): Unit = {
-          val n = nextN()
-          callApi(n)
-        }
-      }, /* initialDelay = */ 10, /* delay = */ 1, SECONDS)
-
-    es.schedule(new Runnable {
-      override def run(): Unit = p.tryComplete(Try(scheduledFuture.cancel(false)))
-    }, config.duration.length, config.duration.unit)
-
-    p.future.andThen { case _ => es.shutdown() }(mat.executionContext)
-  }
-}
-
-abstract class ApiClient[T, U] extends Closeable {
-
-  def execute(req: T)(implicit ec: ExecutionContext): Future[U]
-
-}
-
-abstract class Generator[T] {
-
-  def requests(n: Int): List[T]
 
 }
