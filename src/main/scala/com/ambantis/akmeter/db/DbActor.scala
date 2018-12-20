@@ -22,22 +22,33 @@ class DbActor(config: DbConfig) extends BaseActor {
     log.info("db starting up ...")
 
   override def receive: Receive = {
-    case msg: String => handle(msg, sender())
+    case s: String => handle(s, sender())
   }
 
-  def handle(msg: String, originalSender: ActorRef): Unit = {
+  def handle(s: String, originalSender: ActorRef): Unit = {
     def isFailure(): Boolean = rand.nextDouble() > config.successRate
     def notFound(): Boolean = rand.nextDouble() > config.foundRate
 
     val delay: FiniteDuration = (rand.nextDouble() * config.range + config.min).length.nanos
-
     val result: Status.Status =
       isFailure() match {
         case true                => Status.Failure(new Exception("boom"))
         case false if notFound() => Status.Success(None)
-        case _                   => Status.Success(Some(msg.hashCode))
+        case _                   => Status.Success(Some(computeHash(s)))
       }
 
     system.scheduler.scheduleOnce(delay, originalSender, result)(dispatcher)
+  }
+
+  def isPalindrome(s: String): Boolean = {
+    val raw = s.toLowerCase().replaceAll("[^A-Za-z0-9]", "")
+    raw == raw.reverse
+  }
+
+  def computeHash(s: String): Int = {
+    val hash = s.hashCode()
+    val sign: Int = if (hash < 0) -1 else 1
+    if (isPalindrome(s)) math.abs(hash).toString.reverse.toInt * sign
+    else hash
   }
 }
