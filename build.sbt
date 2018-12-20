@@ -9,3 +9,7 @@ lazy val root = (project in file(".")).settings(
   name := "akka-meter",
   libraryDependencies ++= Dependencies.all
 )
+
+Compile / PB.targets := Seq(
+  scalapb.gen(flatPackage = true) -> (Compile / sourceManaged).value
+)
