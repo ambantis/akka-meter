@@ -22,10 +22,10 @@ class DbActor(config: DbConfig) extends BaseActor {
     log.info("db starting up ...")
 
   override def receive: Receive = {
-    case any: Any => handle(any, sender())
+    case msg: String => handle(msg, sender())
   }
 
-  def handle(any: Any, originalSender: ActorRef): Unit = {
+  def handle(msg: String, originalSender: ActorRef): Unit = {
     def isFailure(): Boolean = rand.nextDouble() > config.successRate
     def notFound(): Boolean = rand.nextDouble() > config.foundRate
 
@@ -35,7 +35,7 @@ class DbActor(config: DbConfig) extends BaseActor {
       isFailure() match {
         case true                => Status.Failure(new Exception("boom"))
         case false if notFound() => Status.Success(None)
-        case _                   => Status.Success(Some(any.hashCode))
+        case _                   => Status.Success(Some(msg.hashCode))
       }
 
     system.scheduler.scheduleOnce(delay, originalSender, result)(dispatcher)

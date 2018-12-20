@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package com.ambantis.akmeter.protos;
+
+// The greeting service definition.
+service Hash {
+  // Sends a Hash request
+  rpc ComputeHash (HashRequest) returns (HashReply) {}
+}
+
+// The request computing a HashCode for message
+message HashRequest {
+  string body = 1;
+}
+
+// The response message containing the greetings
+message HashReply {
+  int32 hash_code = 1;
+}
