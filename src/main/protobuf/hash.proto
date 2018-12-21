@@ -15,5 +15,5 @@ message HashRequest {
 
 // The response message containing the greetings
 message HashReply {
-  int32 hash_code = 1;
+  int32 hash = 1;
 }

@@ -1,15 +1,19 @@
 package com.ambantis.akmeter
 package db
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.actor.{ActorRef, Props, Status}
+import akka.pattern.pipe
 
 object DbActor {
 
   val name: String = "db"
 
   def props(config: DbConfig): Props = Props(new DbActor(config))
+
+  final case class FailFreeCompute(s: String)
 }
 
 class DbActor(config: DbConfig) extends BaseActor {
@@ -23,6 +27,10 @@ class DbActor(config: DbConfig) extends BaseActor {
 
   override def receive: Receive = {
     case s: String => handle(s, sender())
+
+    case FailFreeCompute(s) =>
+      val originalSender = sender()
+      Future.successful(computeHash(s)).pipeTo(originalSender)
   }
 
   def handle(s: String, originalSender: ActorRef): Unit = {
