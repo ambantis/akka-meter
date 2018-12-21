@@ -53,10 +53,6 @@ class DbActor(config: DbConfig) extends BaseActor {
     raw == raw.reverse
   }
 
-  def computeHash(s: String): Int = {
-    val hash = s.hashCode()
-    val sign: Int = if (hash < 0) -1 else 1
-    if (isPalindrome(s)) math.abs(hash).toString.reverse.toInt * sign
-    else hash
-  }
+  def computeHash(s: String): Int = s.hashCode()
+
 }

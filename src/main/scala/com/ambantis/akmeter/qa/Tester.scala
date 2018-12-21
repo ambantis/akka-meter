@@ -26,10 +26,11 @@ import io.grpc.{CallOptions, ManagedChannel, ManagedChannelBuilder}
 import com.ambantis.akmeter.protos.{HashGrpc, HashReply, HashRequest}
 import com.ambantis.akmeter.util._
 import com.ambantis.akmeter.db.DbActor
+import com.ambantis.akmeter.sim.{Simulator, SequentialSimulator}
 
 object Tester {
 
-  val name: String = "simulator"
+  val name: String = "tester"
 
   def props(config: AppConfig, dbActor: ActorRef): Props = {
     val ip: InetSocketAddress = new InetSocketAddress("127.0.0.1", config.api.port)
@@ -49,6 +50,7 @@ object Tester {
         stub.computeHash(request)
     }
 
+
     Props(new Tester(config.qa, dbActor, client, requestGenerator))
   }
 
@@ -56,6 +58,7 @@ object Tester {
     new Generator[HashRequest] {
 
       val xs = List(
+        "aba",
         "action",
         "adventure",
         "anime",
@@ -121,8 +124,22 @@ class Tester(config: QaConfig,
 
   val expected = new collection.mutable.HashMap[String, Int]()
 
+  val metrics =
+    new Metrics[HashRequest, HashReply] {
+      def ok(implicit request: HashRequest): Unit = log.info("got ok")
+      def unk(implicit request: HashRequest): Unit = log.info("got unk")
+      def error(e: Throwable)(implicit request: HashRequest): Unit = log.info("got error {}", e)
+      def inflightInc(): Unit = log.info("got inflight inc")
+      def inflightDec(): Unit = log.info("got inflight dec")
+
+      def latency(time: Long): Unit = log.info("got latency {}", time)
+
+      def now(): Long = System.currentTimeMillis()
+
+    }
+
   def validate(request: HashRequest, response: HashReply): Try[Option[Unit]] =
-    Try(expected.get(request.body).map(hash => require(hash == response.hash)))
+    Try(expected.get(request.body).map(hash => require(hash == response.hash, s"REQUIREMENTS FAILURE!! expected $hash != ${response.hash}")))
 
   override def preStart(): Unit = {
     log.info(s"simulation starting up")
@@ -143,6 +160,16 @@ class Tester(config: QaConfig,
 
     log.info(s"simulation seed completed")
 
+  }
+
+  val simulation: Simulator[HashRequest, HashReply] =
+    SequentialSimulator(config, client, validate, gen, metrics)
+
+  implicit val mat = ActorMaterializer()
+
+  simulation.run.onComplete { result =>
+    log.info(s"got result $result, shutting down...")
+    context stop self
   }
 
   override def receive: Receive = Actor.emptyBehavior

@@ -42,7 +42,7 @@ final case class SequentialSimulator[T, U](
     import mat.executionContext
     val p = Promise[Boolean]()
 
-    if (canBeRun) p.tryFailure(new IllegalArgumentException("simulation already started"))
+    if (!canBeRun) p.tryFailure(new IllegalArgumentException("simulation already started"))
     else {
       val scheduledFuture =
         es.scheduleAtFixedRate(new Runnable {

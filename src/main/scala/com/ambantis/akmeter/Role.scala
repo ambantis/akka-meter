@@ -5,6 +5,7 @@ import scala.collection.JavaConverters._
 import akka.actor.{ActorRef, Props}
 import com.typesafe.config.{Config, ConfigException}
 import com.ambantis.akmeter.api.ApiActor
+import com.ambantis.akmeter.qa.QaActor
 
 /** Represents a High Level grouping of application code within the Application.
  *
@@ -34,6 +35,7 @@ object Role {
   @throws[IllegalArgumentException]("unknown role")
   def apply(name: String): Role = name.toLowerCase match {
     case ApiActor.name => ApiActor
+    case QaActor.name => QaActor
     case unk           => throw new IllegalArgumentException(s"unknown role $unk")
   }
 
@@ -54,5 +56,5 @@ object Role {
   }
 
   // all application roles (excludes performance testing role)
-  final val All: Set[Role] = Set(ApiActor)
+  final val All: Set[Role] = Set(ApiActor, QaActor)
 }

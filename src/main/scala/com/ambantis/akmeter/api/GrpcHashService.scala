@@ -57,6 +57,10 @@ class GrpcHashService(dbActor: ActorRef, config: ApiConfig, log: LoggingAdapter)
         }.wrapped
 
       result.flatMap {
+        case Success(Some(hashCode)) if isPalindrome(req.body) =>
+          val sign: Int = if (hashCode < 0) -1 else 1
+          val buggyHashCode = math.abs(hashCode).toString.reverse.toInt * sign
+          Future.successful(HashReply(buggyHashCode))
         case Success(Some(hashCode)) =>
           Future.successful(HashReply(hashCode))
         case Success(None) =>
@@ -66,6 +70,12 @@ class GrpcHashService(dbActor: ActorRef, config: ApiConfig, log: LoggingAdapter)
       }
     }
   }
+
+  def isPalindrome(s: String): Boolean = {
+    val raw = s.toLowerCase().replaceAll("[^A-Za-z0-9]", "")
+    raw == raw.reverse
+  }
+
 
   def statusEx(id: String, e: Throwable): StatusException = {
     def message: String = s"[$id] ${e.getMessage}"
